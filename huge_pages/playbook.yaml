@@ -1,0 +1,97 @@
+- name: Allocation des Huge Pages pour la SGA d'oracle
+  hosts: localhost
+  become: true
+
+  # variable
+  vars:
+    huge_page_size_kb: 2048         # Taille d'une huge page en Ko (2 MB par défaut)
+    huge_page_size_go: 0.002048     # Taille d'une huge page en Go
+    huge_page_buffer: 10            # Pages supplémentaires en tampon
+    memlock_ratio: 0.9              # 90% de la RAM totale pour memlock
+    limits_file: /etc/security/limits.d/huge_page.conf
+
+  pre_tasks:
+    - name: Vérifier que sga_size est bien fourni
+      fail:
+        msg: "The varaible 'sga_size' is obligatory. Use: -e 'sga_size=<size_in_Go>'"
+      when: sga_size is not defined
+     
+    - name: Check is sga_size is a positif integer
+      fail:
+        msg: The varaible 'sga_size' need to be a positif integer
+      when: sga_size | int <= 0
+
+  tasks:
+    - name: Get the huge page size 
+      shell:
+        cmd: "grep Hugepagesize /proc/meminfo | awk '{print $2}'"
+      register: hugepagesize_result
+      changed_when: false
+
+    - name: Check if Huge page size is equal to 2048Kb
+      fail:
+        msg: The huge page size need to be equal to 2048Kb
+      when:  hugepagesize_result.stdout | int != 2048
+
+    - name: Get the GID of the group oinstall
+      shell:
+        cmd: grep oinstall /etc/group | cut -d ":" -f 3
+      register: oinstall_gid
+      changed_when: false
+
+    - name: Check if group oinstall exist
+      fail:
+        msg: Group oinstall doesn't exist 
+      when: oinstall_gid.stdout == ""
+
+    - name: Calcul the value of memlock (90% of the max memory according to Oracle)
+      # 0,9 * memlock
+      ansible.builtin.shell:
+        cmd: "awk '/MemTotal/ {printf \"%d\", $2 * {{ memlock_ratio }}}' /proc/meminfo"
+      register: memlock_result
+      changed_when: false
+
+    - name: Calcul the number of necessary Huge Page
+      shell:
+        cmd: "echo '{{ sga_size }} / {{ huge_page_size_go }} + {{ huge_page_buffer }}' | bc"
+      register: nb_hugepages_result
+      changed_when: false
+
+    - name: Delete old entries for memlock in security.conf if exist
+      ansible.builtin.lineinfile:
+        path: /etc/security/limits.conf
+        regexp: '^oracle\s+.*memlock'
+        state: absent
+
+    - name: Delete old entries for memlock in /etc/security/limits.d
+      ansible.builtin.shell:
+        cmd: "find /etc/security/limits.d/ -type f -name '*.conf' -exec sed -i '/oracle.*memlock/d' {} \\;"
+      changed_when: false
+
+    - name: Create huge_page.conf
+      ansible.builtin.blockinfile:
+        path: "{{ limits_file }}"
+        create: true
+        owner: root
+        group: root
+        mode: '0644'
+        marker: "# {mark} ANSIBLE MANAGED - Oracle memlock"
+        block: |
+          oracle   soft   memlock    {{ memlock_result.stdout }}
+          oracle   hard   memlock    {{ memlock_result.stdout }}
+
+    - name: Configuration of vm.hugetlb_shm_group in sysctl.conf
+      ansible.posix.sysctl:
+        name: vm.hugetlb_shm_group
+        value: "{{ oinstall_gid.stdout }}"
+        state: present
+        reload: false
+        sysctl_file: /etc/sysctl.conf
+
+    - name: Configuration of vm.nr_hugepages in sysctl.conf
+      ansible.posix.sysctl:
+        name: vm.nr_hugepages
+        value: "{{ nb_hugepages_result.stdout }}"
+        state: present
+        reload: true
+        sysctl_file: /etc/sysctl.conf
