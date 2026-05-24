@@ -1,0 +1,43 @@
+---
+- name: Set up swap on multiple servers
+  hosts: all
+  become: true
+  vars:
+    swapfile_path: /.swapfile2
+    swapfile_size: 4
+
+
+  tasks:
+
+    - name: Check if swapfile already exist
+      stat:
+        path: "{{ swapfile_path }}"
+      register: st
+
+    - name: Create swap file with dd
+      command:
+        cmd: "dd if=/dev/zero of={{ swapfile_path }} bs=1M count={{ swapfile_size | int * 1024 }}"
+      when: not st.stat.exists
+
+    - name: Set permissions on swapfile
+      file:
+        path: "{{ swapfile_path }}"
+        mode: '0600'
+        owner: root
+        group: root
+
+    - name: Make swap file
+      command:
+        cmd: mkswap "{{ swapfile_path }}"
+      when: not st.stat.exists
+    
+    - name: Enable the swap file
+      command:
+        cmd: swapon "{{ swapfile_path }}"
+      when: not st.stat.exists 
+
+    - name: Adding new line to /etc/fstab
+      ansible.builtin.lineinfile:
+        line: "{{ swapfile_path }}      none    swap    sw      0       0"
+        path: /etc/fstab
+      when: not st.stat.exists 
