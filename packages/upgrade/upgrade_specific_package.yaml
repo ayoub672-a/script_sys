@@ -1,0 +1,22 @@
+---
+- name: Upgrade given packages, working on Linux Debian and RedHat family
+  hosts: all
+  become: true
+  # Take on argument a list of packages to upgrade
+  # Example:
+  # package_upgrade: [nginx, postgres, sysstat]
+  
+  tasks:
+    - name: Upgrade the given package(s) on Debian family
+      apt:
+        name: "{{ item }}"
+        state: latest
+      loop: "{{ package_upgrade }}"
+      when: ansible_os_family == "Debian"
+
+    - name: Upgrade the given package(s) on RedHat family
+      dnf:
+        name: "{{ item }}"
+        state: latest
+      loop: "{{ package_upgrade }}"
+      when: ansible_os_family == "RedHat"
