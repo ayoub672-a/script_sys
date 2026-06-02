@@ -1,0 +1,46 @@
+---
+- name: Playbook to deploy PSI on Linux
+  hosts: all
+  become: true
+  vars:
+    oci_bool: false
+  tasks:
+  # Différent si UEFI ou BIOS
+  # Donc il faut identifier si c'est l'un ou l'autre 
+  # https://access.redhat.com/solutions/3781221
+  - name: Identify if BIOS or UEFI
+    shell: dmesg -T | grep -i "EFI"
+    register: value_efi
+    ignore_errors: true
+  
+  # Si RHEL 9
+  - name: Add modification for all kernel
+    shell: grubby --update-kernel=ALL --args="psi=1"
+    when: 
+      - ansible_os_family == "RedHat"
+      - ansible_distribution_major_version | int  >= 9
+
+  - name: Add content to /etc/default/grub
+    lineinfile:
+      path: /etc/default/grub
+      regexp: '^GRUB_CMDLINE_LINUX="(?!.*psi=1)(.*)"'
+      line: 'GRUB_CMDLINE_LINUX="\1 psi=1"'
+      backrefs: true
+    register: grub_modified
+    when:
+      - ansible_os_family == "RedHat"
+      - ansible_distribution_major_version | int  < 9
+
+  # sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+  - name: Reload the config of grub for Bios 
+    command: grub2-mkconfig -o /boot/grub2/grub.cfg
+    when: 
+      - grub_modified.changed
+      - value_efi.stdout == ""
+  
+  # sudo grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg
+  - name: Reload the conf of grub for UEFI
+    command: grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg 
+    when:
+      - grub_modified.changed
+      - value_efi.stdout != ""
