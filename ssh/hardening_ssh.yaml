@@ -48,7 +48,14 @@
         owner: root
         group: root
         mode: '0600'
+        notify: restart sshd
 
     - name: Validate sshd config
       ansible.builtin.command: sshd -t
       changed_when: false
+
+  handlers:
+    - name: restart sshd
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
