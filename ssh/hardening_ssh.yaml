@@ -1,0 +1,54 @@
+---
+- name: Hardening SSH config
+  hosts: all
+  become: true
+  vars:
+    sshd_file: /etc/ssh/sshd_config
+    sshd_directory: /etc/ssh/sshd_config.d
+    sshd_hardening_file: /etc/ssh/sshd_config.d/99_ssh_hardening.conf
+
+  tasks:
+    - name: Create directory /etc/ssh/sshd_config.d if doesn't exist
+      ansible.builtin.file:
+        path: "{{ sshd_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Check if Include is present in /etc/ssh/sshd_config
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_file }}"
+        state: absent
+        regexp: "^Include /etc/ssh/sshd_config.d/\\*.conf"
+      check_mode: true
+      register: check_include
+      changed_when: false
+
+    - name: Insert Include if not present
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_file }}"
+        state: present
+        line: "Include /etc/ssh/sshd_config.d/*.conf"
+      when: check_include.found == 0
+
+    - name: Create hardening drop-in file
+      ansible.builtin.copy:
+        dest: "{{ sshd_hardening_file }}"
+        content: |
+          # SSH Enforcing parameters
+          # Here implement your own rules !
+          # It's simply an exemple !!
+          PasswordAuthentication no
+          PermitRootLogin no
+          PermitEmptyPasswords no
+          LoginGraceTime 20
+          MaxAuthTries 3
+          X11Forwarding no
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Validate sshd config
+      ansible.builtin.command: sshd -t
+      changed_when: false
