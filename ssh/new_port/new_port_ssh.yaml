@@ -1,0 +1,30 @@
+---
+ - name: Custom port for ssh
+   hosts: all
+   become: true
+   vars:
+     new_ssh_port: 2222
+     sshd_config_file: /etc/ssh/sshd_config
+
+   tasks:
+     - name: Change config of firewall
+       ansible.posix.firewalld:
+         port: "{{ new_ssh_port }}/tcp"
+         state: enabled
+         permanent: true
+         immediate: true
+       when: ansible_os_family == "RedHat"
+
+     - name: Change port in sshd_config
+       ansible.builtin.lineinfile:
+         path: /etc/ssh/sshd_config
+         regexp: "^#?Port"
+         line: "Port {{ new_ssh_port }}"
+         validate: sshd -t
+       notify: restart sshd
+
+   handlers:
+     - name: restart sshd
+       ansible.builtin.service:
+         name: sshd
+         state: restarted
