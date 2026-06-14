@@ -1,0 +1,11 @@
+users:
+  - user_name: ayoub
+    home_creation: true
+    user_shell: /bin/bash
+    user_group: ""
+    password: "{{ vault_password_ayoub }}"
+  - user_name: test
+    home_creation: false
+    user_shell: /sbin/nologin
+    user_group: "wheel"
+    password: "{{ vault_password_test }}"
