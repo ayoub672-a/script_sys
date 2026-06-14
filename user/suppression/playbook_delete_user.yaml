@@ -1,0 +1,14 @@
+---
+- name: Playbook to delete user
+  hosts: localhost
+  become: true
+  vars_files:
+    - vars/users.yaml
+
+  tasks:
+    - name: Delete user
+      ansible.builtin.user:
+        name: "{{ item.user_name }}"
+        state: absent
+        remove: true
+      loop: "{{ users }}"
