@@ -1,0 +1,25 @@
+---
+- name: Playbook for adding / modify kernel parameters
+  hosts: localhost
+  become: true
+  vars_files:
+    - vars/parameters.yaml
+
+  tasks:
+  # https://access.redhat.com/solutions/3726391
+  # When the system boot, systemd-sysctl read files in /etc/sysctl.d/*
+
+  #- name: Set parameter in /etc/sysctl.d/99-sysctl.conf
+  #  ansible.builtin.lineinfile:
+  #    path: /etc/sysctl.d/99-sysctl.conf
+  #    regexp: "^{{ parameter_name }}"
+  #    line: "{{ parameter_name }} = {{ parameter_value }}"
+
+  - name: Set parameter in /etc/sysctl.d/99-sysctl.conf
+    ansible.posix.sysctl:
+      name: "{{ item.name }}"
+      value: "{{ item.value }}"
+      state: present
+      sysctl_file: /etc/sysctl.d/99-sysctl.conf
+      reload: true
+    loop: "{{ kernel_parameters }}" 

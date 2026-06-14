@@ -1,0 +1,5 @@
+kernel_parameters:
+  - name: vm.swappiness
+    value: 10
+  - name: vm.dirty_ratio
+    value: 20
