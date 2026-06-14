@@ -2,24 +2,22 @@
 - name: Installation of one or more packages on Linux Hosts
   hosts: all
   become: true
-  # Take a list of packages to install in argument
-  # Example:
-  # package_install: [nginx, postgres, syssstat]
+  vars_files:
+    - vars/packages_install.yaml
   
   tasks:
-      
     - name: Install the package(s) on Debian Family
       apt:
         update_cache: yes
-        name: "{{ item }}"
+        name: "{{ item.name }}"
         state: present
-      loop: "{{ package_install }}"
+      loop: "{{ packages }}"
       when: ansible_os_family == "Debian"
 
     - name: Install the package(s) on Redhat Family
       dnf:
-        name: "{{ item }}"
+        name: "{{ item.name }}"
         state: latest
-      loop: "{{ package_install }}"
+      loop: "{{ packages }}"
       when: ansible_os_family == "RedHat"
 
