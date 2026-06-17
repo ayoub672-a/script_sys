@@ -1,0 +1,53 @@
+---
+- name: Playbook for creation of Lv on Linux
+  hosts: localhost
+  become: true
+  vars: 
+    disks:
+      - /dev/sdb
+    vg_name: VG_TEST
+    lv_name: LV_TEST
+    # Specify the size in Go
+    size: 10
+    mount_point: /test
+
+  tasks:
+    - name: Create the VG
+      community.general.lvg:
+        vg: "{{ vg_name }}"
+        state: present
+        pvs: "{{ disks }}"
+
+    - name: Create the LV
+      community.general.lvol:
+        lv: "{{ lv_name }}"
+        vg: "{{ vg_name }}"
+        size: "{{ size }}G"
+
+    - name: Create the FS
+      community.general.filesystem:
+        dev: /dev/{{ vg_name }}/{{ lv_name }}
+        fstype: xfs
+
+    - name: Create the mount point for the FS
+      ansible.builtin.file:
+        path: /test
+        state: directory
+        mode: '0644'
+
+    - name: Get UUID of the LV
+      ansible.builtin.shell: 
+        cmd: blkid /dev/{{ vg_name }}/{{ lv_name }} | awk '{print $2}' | cut -d"=" -f 2 | sed s/\"//g
+      register: uuid
+
+    - name: Debug
+      debug: 
+        msg: "{{ uuid.stdout }}"
+
+    - name: Mount the FS
+      ansible.posix.mount:
+        boot: true
+        path: "{{ mount_point }}"
+        src: "UUID={{ uuid.stdout }}"
+        state: mounted
+        fstype: xfs
